@@ -52,29 +52,29 @@ const PostPreview = ( props ) => {
 		headingLevel = 3;
 	}
 
-	console.log( props );
-
 	return (
-		<div className="single-post-block__post-preview">
-			{ thePost && (
-				<div className={ postClass }>
-					{ wp.element.createElement( 'h' + headingLevel, null, thePost.title ) }
-					<div className="single-post-block__post-excerpt">{ thePost.excerpt }</div>
-					{
-						showImage && thePost.thumbnail && (
-							<figure className="single-post-block__post-image">
-								<img src={ thePost.thumbnail } alt="Post preview thumbnail" />
-							</figure>
-						)
-					}
-				</div>
+		<div {...useBlockProps()}>
+			<div className="single-post-block__post-preview">
+				{ thePost && (
+					<div className={ postClass }>
+						{ wp.element.createElement( 'h' + headingLevel, null, thePost.title ) }
+						<div className="single-post-block__post-excerpt">{ thePost.excerpt }</div>
+						{
+							showImage && thePost.thumbnail && (
+								<figure className="single-post-block__post-image">
+									<img src={ thePost.thumbnail } alt="Post preview thumbnail" />
+								</figure>
+							)
+						}
+					</div>
+					
+				) || (
+					<div className="single-post-block__loading-placeholder">
+						<Spinner />
+					</div>
+				) }
 				
-			) || (
-				<div className="single-post-block__loading-placeholder">
-					<Spinner />
-				</div>
-			) }
-			
+			</div>
 		</div>
 	);
 }
@@ -131,28 +131,30 @@ export default function Edit( props ) {
 		<div {...blockProps}>
 			<Fragment>
 				<InspectorControls key="display">
-					<PanelBody title={ "Display Optiosn" } initialOpen={ true }>
-						<PanelRow>
-							<RangeControl
-								label="Heading Level"
-								value={ displayOptions.headingLevel || 3 }
-								onChange={ ( value ) => {
-									setDisplayOption( 'headingLevel', value );
-								} }
-								min={ 1 }
-								max={ 6 }
-							/>
-						</PanelRow>
-						<PanelRow>
-							<ToggleControl
-								label={ "Show Thumbnail" }
-								checked={ displayOptions.showImage || false }
-								onChange={ () => {
-									setDisplayOption( 'showImage', ! displayOptions.showImage );
-								} }
-							/>
-						</PanelRow>
-					</PanelBody>
+					<Panel header="Settings" className="single-post-block__panel--settings">
+						<PanelBody title={ "Display Options" } initialOpen={ true }>
+							<PanelRow>
+								<RangeControl
+									label="Heading Level"
+									value={ displayOptions.headingLevel || 3 }
+									onChange={ ( value ) => {
+										setDisplayOption( 'headingLevel', value );
+									} }
+									min={ 1 }
+									max={ 6 }
+								/>
+							</PanelRow>
+							<PanelRow>
+								<ToggleControl
+									label={ "Show Thumbnail" }
+									checked={ displayOptions.showImage || false }
+									onChange={ () => {
+										setDisplayOption( 'showImage', ! displayOptions.showImage );
+									} }
+								/>
+							</PanelRow>
+						</PanelBody>
+					</Panel>
 				</InspectorControls>
 				{ editorState && (
 					<Fragment>

@@ -13,122 +13,169 @@
  * @package           create-block
  */
 
-namespace nfntscrl\Blocks\Single_Post;
+namespace nfntscrl\Blocks;
 
 const PLUGIN_PATH = __DIR__;
 
-/**
- * Registers the block using the metadata loaded from the `block.json` file.
- * Behind the scenes, it registers also all assets so they can be enqueued
- * through the block editor in the corresponding context.
- *
- * @see https://developer.wordpress.org/reference/functions/register_block_type/
- */
-function create_blocks() {
-	register_block_type_from_metadata(
-		 __DIR__ . '/src/post', [
-			'render_callback' => apply_filters( 'single_post_block_render_callback', 'nfntscrl\Blocks\Single_Post\display_post' ),
-		]
-	);
-	//register_block_type( __DIR__ . '/src/group' );
-}
-add_action( 'init', 'nfntscrl\Blocks\Single_Post\create_blocks' );
+class Single_Post {
 
-function array_to_html_attrs( $attrs ) {
-	$html_list = [];
-	foreach( $attrs as $key => $attr ) {
-		$html_list[] = sprintf( '%s="%s"', sanitize_title( $key ), esc_attr( $attr ) );
-	}
+	public static $self = null;
 
-	return implode( ' ', $html_list );
-}
-
-function post_types_allowed() {
-	return apply_filters( 'single_post_block_types_allowed', [ 'post'] );
-}
-
-function env_vars() {
-
-	if ( ! get_current_screen()->is_block_editor() ) {
-		return;
-	}
-
-	$env_vars = apply_filters( 'single_post_block_env_vars', [
-		'post_types'            => implode( ',', post_types_allowed() ),
-		'default_heading_level' => 3,
-		'default_show_image'    => false,
-	] );
-
-	echo '<script type="application/javascript">';
-	printf( 'var nfntscrlPostBlock = %s', json_encode( $env_vars ) );
-	echo '</script>';
-
-}
-add_action( 'admin_footer', 'nfntscrl\Blocks\Single_Post\env_vars', 1 );
-
-function display_post( $attributes ) {
-
-	$template_locations = [
-		get_stylesheet_directory() . '/template-parts',
-		get_template_directory() . '/template-parts',
-		__DIR__ . '/templates',
-	];
-
-	if ( empty( $attributes['postId'] ) || ! is_numeric( $attributes['postId'] ) ) {
-		return '';
-	}
-
-	$the_post = get_post( $attributes['postId'] );
-	if ( ! $the_post || is_wp_error( $the_post ) ) {
-		return '';
-	}
-
-	ob_start();
-
-	foreach( $template_locations as $path ) {
-		if ( file_exists( $path . '/' . 'single-post-block-excerpt.php' ) ) {
-			include( $path . '/' . 'single-post-block-excerpt.php' );
-			break;
+	public function __construct() {
+		if ( self::$self ) {
+			return;
 		}
+		self::$self = $this;
+
+		add_action( 'init', [ $this, 'create_blocks' ] );
+		add_action( 'admin_footer', [ $this, 'env_vars' ], 1 );
+		add_action( 'rest_api_init', [ $this, 'register_rest' ] );
 	}
 
-	$output = ob_get_clean();
+	function env_vars() {
 
-	return $output;
+		if ( ! get_current_screen()->is_block_editor() ) {
+			return;
+		}
+	
+		$env_vars = apply_filters( 'single_post_block_env_vars', [
+			'post_types'            => implode( ',', $this->post_types_allowed() ),
+			'default_heading_level' => 3,
+			'default_show_image'    => false,
+		] );
+	
+		echo '<script type="application/javascript">';
+		printf( 'var nfntscrlPostBlock = %s', json_encode( $env_vars ) );
+		echo '</script>';
+	
+	}
+
+	public function create_blocks() {
+		register_block_type_from_metadata(
+			 __DIR__ . '/src/post', [
+				'render_callback' => apply_filters( 'single_post_block_render_callback',
+					apply_filters( 'single_post_block_excerpt_render_callback', [ $this, 'display_post' ] ) 
+				),
+			]
+		);
+		register_block_type_from_metadata(
+			__DIR__ . '/src/group', [
+			   'render_callback' => apply_filters( 'single_post_block_group_block_render_callback', 'nfntscrl\Blocks\Single_Post\display_group' ),
+			]
+		);
+	}
+
+	function register_rest() {
+
+		register_rest_route( 'nfntscrl/v1', 'single_post/(?P<id>\d+)', [
+			'methods' => 'GET',
+			'callback' => [ $this, 'get_any_post' ],
+			'permission_callback' => '__return_true',
+		] );
+	
+	}
+
+	function get_any_post( $request ) {
+
+		$id = $request->get_param( 'id' );
+		if ( empty( $id ) ) {
+			return new WP_Error( 'incomplete_request', 'Did not request a post ID.', [ 'code' => 403 ] );
+		}
+	
+		if ( ! current_user_can( 'read_post', $id ) ) {
+			return new WP_Error( 'unauthorized_request', 'Please request a publicly available post.', [ 'code' => 401 ] );
+		}
+	
+		$post = get_post( $id );
+		if ( ! $post || is_wp_error( $post ) ) {
+			return new WP_Error( 'internal_error', 'There was an error retrieving this post.', [ 'code' => 500 ] );
+		}
+	
+		return [
+			'title' => get_the_title( $post ),
+			'excerpt' => get_the_excerpt( $post ),
+			'thumbnail' => get_the_post_thumbnail_url( $post, 'thumbnail' ),
+		];
+	
+	}
+
+	public function post_types_allowed() {
+		return apply_filters( 'single_post_block_types_allowed', [ 'post' ] );
+	}
+
+	public function array_to_html_attrs( $attrs ) {
+		$html_list = [];
+		foreach( $attrs as $key => $attr ) {
+			$html_list[] = sprintf( '%s="%s"', sanitize_title( $key ), esc_attr( $attr ) );
+		}
+
+		return implode( ' ', $html_list );
+	}
+
+	function display_post( $attributes ) {
+
+		$template_locations = $this->get_template_locations();
+	
+		if ( empty( $attributes['postId'] ) || ! is_numeric( $attributes['postId'] ) ) {
+			return '';
+		}
+	
+		$the_post = get_post( $attributes['postId'] );
+		if ( ! $the_post || is_wp_error( $the_post ) ) {
+			return '';
+		}
+	
+		ob_start();
+	
+		foreach( $template_locations as $path ) {
+			if ( file_exists( $path . '/' . 'single-post-block-excerpt.php' ) ) {
+				include( $path . '/' . 'single-post-block-excerpt.php' );
+				break;
+			}
+		}
+	
+		$output = ob_get_clean();
+	
+		return $output;
+	
+	}
+
+	public function get_template_locations() {
+		return apply_filters( 'single_post_block_template_directories', [
+			get_stylesheet_directory() . '/template-parts',
+			get_template_directory() . '/template-parts',
+			__DIR__ . '/templates',
+		] );
+	}
+	
+	function display_group( $attributes ) {
+	
+		$template_locations = $this->get_template_locations();
+	
+		if ( empty( $attributes['postId'] ) || ! is_numeric( $attributes['postId'] ) ) {
+			return '';
+		}
+	
+		$the_post = get_post( $attributes['postId'] );
+		if ( ! $the_post || is_wp_error( $the_post ) ) {
+			return '';
+		}
+	
+		ob_start();
+	
+		foreach( $template_locations as $path ) {
+			if ( file_exists( $path . '/' . 'single-post-block-group.php' ) ) {
+				include( $path . '/' . 'single-post-block-group.php' );
+				break;
+			}
+		}
+	
+		$output = ob_get_clean();
+	
+		return $output;
+	
+	}
 
 }
 
-function register_rest() {
-
-	register_rest_route( 'nfntscrl/v1', 'single_post/(?P<id>\d+)', [
-		'methods' => 'GET',
-    	'callback' => 'nfntscrl\Blocks\Single_Post\get_any_post',
-		'permission_callback' => '__return_true',
-	] );
-
-}
-add_action( 'rest_api_init', 'nfntscrl\Blocks\Single_Post\register_rest' );
-
-function get_any_post( $request ) {
-
-	$id = $request->get_param( 'id' );
-	if ( empty( $id ) ) {
-		return new WP_Error( 'incomplete_request', 'Did not request a post ID.', [ 'code' => 403 ] );
-	}
-
-	if ( ! current_user_can( 'read_post', $id ) ) {
-		return new WP_Error( 'unauthorized_request', 'Please request a publicly available post.', [ 'code' => 401 ] );
-	}
-
-	$post = get_post( $id );
-	if ( ! $post || is_wp_error( $post ) ) {
-		return new WP_Error( 'internal_error', 'There was an error retrieving this post.', [ 'code' => 500 ] );
-	}
-
-	return [
-		'title' => get_the_title( $post ),
-		'excerpt' => get_the_excerpt( $post ),
-		'thumbnail' => get_the_post_thumbnail_url( $post, 'thumbnail' ),
-	];
-
-}
+new Single_Post();
