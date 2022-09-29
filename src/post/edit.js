@@ -15,14 +15,39 @@ import { useState, Fragment, RawHTML } from '@wordpress/element';
 
 import apiFetch from '@wordpress/api-fetch';
 
+import ServerSideRender from '@wordpress/server-side-render';
+
+
 import './editor.scss';
 
 const PostPreview = ( props ) => {
+
+	const { settings } = props;
+
+	return (
+		<div {...useBlockProps()}>
+			<ServerSideRender
+				block={ "infinity-scroll/single-post-block" }
+				attributes={ settings }
+				LoadingResponsePlaceholder={ () => (
+					<div className="wp-block single-post-block is-state-loading">
+						<Spinner />
+					</div>
+				) }
+			/>
+		</div>
+	);
+
+	/*
 
 	let { postId, headingLevel, showImage } = props;
 
 	const [ thePost, setPostState ] = useState( null );
 	const [ isLoading, setLoadingState ] = useState( false );
+
+	if ( ! headingLevel ) {
+		headingLevel = 3;
+	}
 
 	let postClass = 'single-post-block__post-body';
 
@@ -48,10 +73,6 @@ const PostPreview = ( props ) => {
 		} );
 	};
 
-	if ( ! headingLevel ) {
-		headingLevel = 3;
-	}
-
 	return (
 		<div {...useBlockProps()}>
 			<div className="single-post-block__post-preview">
@@ -76,7 +97,7 @@ const PostPreview = ( props ) => {
 				
 			</div>
 		</div>
-	);
+	);*/
 }
 
 const PostSelector = ( props ) => {
@@ -166,10 +187,13 @@ export default function Edit( props ) {
 							</BlockControls>
 						}
 						<PostPreview 
+							settings={ props.attributes }
+							/*
 							postId={ postId } 
 							postClass={ className }
 							headingLevel={ displayOptions.headingLevel || nfntscrlPostBlock.default_heading_level } 
 							showImage={ displayOptions.showImage || nfntscrlPostBlock.default_show_image } 
+							*/
 						/>
 					</Fragment>
 				) || (

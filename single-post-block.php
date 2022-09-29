@@ -53,6 +53,21 @@ class Single_Post {
 	public function create_blocks() {
 		register_block_type_from_metadata(
 			 __DIR__ . '/src/post', [
+				'api_version'     => 2,
+				'attributes'      => [
+					'postId' => [
+						'type'    => 'integer',
+						'default' => null,
+					],
+					'displayOptions' => [
+						'type' => 'object',
+						'default' => [
+							'headingLevel' => 3,
+							'tag'          => 'blockquote',
+							'showImage'    => false,
+						],
+					]
+				],
 				'render_callback' => apply_filters( 'single_post_block_render_callback',
 					apply_filters( 'single_post_block_excerpt_render_callback', [ $this, 'display_post' ] ) 
 				),
@@ -60,7 +75,7 @@ class Single_Post {
 		);
 		register_block_type_from_metadata(
 			__DIR__ . '/src/group', [
-			   'render_callback' => apply_filters( 'single_post_block_group_block_render_callback', 'nfntscrl\Blocks\Single_Post\display_group' ),
+				'render_callback' => apply_filters( 'single_post_block_group_block_render_callback', [ $this, 'display_group' ] ),
 			]
 		);
 	}
@@ -148,18 +163,9 @@ class Single_Post {
 		] );
 	}
 	
-	function display_group( $attributes ) {
+	function display_group( $attributes, $inner_content = '' ) {
 	
 		$template_locations = $this->get_template_locations();
-	
-		if ( empty( $attributes['postId'] ) || ! is_numeric( $attributes['postId'] ) ) {
-			return '';
-		}
-	
-		$the_post = get_post( $attributes['postId'] );
-		if ( ! $the_post || is_wp_error( $the_post ) ) {
-			return '';
-		}
 	
 		ob_start();
 	
